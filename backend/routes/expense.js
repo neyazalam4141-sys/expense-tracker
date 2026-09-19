@@ -2,6 +2,7 @@ const express = require('express');
 const upload = require('../multerConfig');
 const Expense = require('../models/Expense');
 const extractTextFromImage = require('../ocrHelper');
+const parseReceiptText = require('../parseReceipt');
 
 const router = express.Router();
 
@@ -12,11 +13,13 @@ router.post('/upload', upload.single('receipt'), async (req, res) => {
     }
 
     const extractedText = await extractTextFromImage(req.file.path);
+    const parsedData = parseReceiptText(extractedText);
 
     res.json({
       message: 'File uploaded and processed successfully',
       filePath: req.file.path,
-      extractedText: extractedText
+      extractedText: extractedText,
+      parsedData: parsedData
     });
   } catch (error) {
     res.status(500).json({ message: 'Server error', error: error.message });
