@@ -1,122 +1,170 @@
-import { useState } from 'react'
-import heroImg from './assets/hero.png'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import './App.css'
+import { useState, useEffect } from 'react';
+import axios from 'axios';
 
-function App() {
-  const [count, setCount] = useState(0)
+const AUTH_API = 'http://localhost:5000/api/auth';
+const EXPENSE_API = 'http://localhost:5000/api/expense';
+
+function Dashboard({ user, onLogout }) {
+  const [expenses, setExpenses] = useState([]);
+  const [file, setFile] = useState(null);
+  const [uploading, setUploading] = useState(false);
+  const [message, setMessage] = useState('');
+
+  const loadExpenses = async () => {
+    try {
+      const res = await axios.get(`${EXPENSE_API}/all/${user.id}`);
+      setExpenses(res.data);
+    } catch (err) {
+      setMessage('Expenses load nahi ho paye');
+    }
+  };
+
+  useEffect(() => {
+    loadExpenses();
+  }, []);
+
+  const handleUpload = async (e) => {
+    e.preventDefault();
+    const form = e.target;
+    if (!file) {
+      setMessage('Pehle receipt ki photo chuno');
+      return;
+    }
+
+    const data = new FormData();
+    data.append('receipt', file);
+    data.append('userId', user.id);
+
+    setUploading(true);
+    setMessage('Receipt padh raha hoon... 10-30 second lagenge');
+    try {
+      await axios.post(`${EXPENSE_API}/upload`, data);
+      setMessage('Expense save ho gaya!');
+      setFile(null);
+      form.reset();
+      await loadExpenses();
+    } catch (err) {
+      setMessage(err.response?.data?.error || 'Upload fail ho gaya');
+    }
+    setUploading(false);
+  };
+
+  const total = expenses.reduce((sum, item) => sum + (item.amount || 0), 0);
 
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.jsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
+    <div className="dash">
+      <div className="topbar">
+        <h2>Hi, {user.name}</h2>
+        <button className="logout" onClick={onLogout}>Logout</button>
+      </div>
 
-      <div className="ticks"></div>
+      <div className="panel">
+        <h3>Receipt upload karo</h3>
+        <form onSubmit={handleUpload}>
+          <input type="file" accept="image/*" onChange={(e) => setFile(e.target.files[0])} />
+          <button type="submit" disabled={uploading}>
+            {uploading ? 'Processing...' : 'Upload'}
+          </button>
+        </form>
+        {message && <p className="info">{message}</p>}
+      </div>
 
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
-
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
-  )
+      <div className="panel">
+        <h3>Total kharcha: ₹{total.toFixed(2)}</h3>
+        {expenses.length === 0 ? (
+          <p>Abhi koi expense nahi hai.</p>
+        ) : (
+          <table>
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Merchant</th>
+                <th>Category</th>
+                <th>Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              {expenses.map((item) => (
+                <tr key={item._id}>
+                  <td>{new Date(item.date).toLocaleDateString('en-IN')}</td>
+                  <td>{item.merchant || '-'}</td>
+                  <td>{item.category}</td>
+                  <td>₹{(item.amount || 0).toFixed(2)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </div>
+  );
 }
 
-export default App
+export default function App() {
+  const [mode, setMode] = useState('login');
+  const [form, setForm] = useState({ name: '', email: '', password: '' });
+  const [message, setMessage] = useState('');
+  const [user, setUser] = useState(() => {
+    const saved = localStorage.getItem('user');
+    return saved ? JSON.parse(saved) : null;
+  });
+
+  const handleChange = (e) => {
+    setForm({ ...form, [e.target.name]: e.target.value });
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setMessage('');
+    try {
+      if (mode === 'signup') {
+        await axios.post(`${AUTH_API}/signup`, form);
+        setMessage('Signup ho gaya! Ab login karo.');
+        setMode('login');
+      } else {
+        const res = await axios.post(`${AUTH_API}/login`, {
+          email: form.email,
+          password: form.password,
+        });
+        localStorage.setItem('token', res.data.token);
+        localStorage.setItem('user', JSON.stringify(res.data.user));
+        setUser(res.data.user);
+      }
+    } catch (err) {
+      setMessage(err.response?.data?.message || 'Kuch galat ho gaya');
+    }
+  };
+
+  const logout = () => {
+    localStorage.clear();
+    setUser(null);
+  };
+
+  if (user) {
+    return <Dashboard user={user} onLogout={logout} />;
+  }
+
+  return (
+    <div className="card">
+      <h2>{mode === 'login' ? 'Login' : 'Signup'}</h2>
+      <form onSubmit={handleSubmit}>
+        {mode === 'signup' && (
+          <input name="name" placeholder="Name" value={form.name} onChange={handleChange} />
+        )}
+        <input name="email" placeholder="Email" value={form.email} onChange={handleChange} />
+        <input
+          name="password"
+          type="password"
+          placeholder="Password"
+          value={form.password}
+          onChange={handleChange}
+        />
+        <button type="submit">{mode === 'login' ? 'Login' : 'Signup'}</button>
+      </form>
+      <button className="link" onClick={() => setMode(mode === 'login' ? 'signup' : 'login')}>
+        {mode === 'login' ? 'Naya account banao' : 'Pehle se account hai? Login'}
+      </button>
+      {message && <p className="msg">{message}</p>}
+    </div>
+  );
+}
